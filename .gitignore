@@ -1,0 +1,30 @@
+# --- ortamlar / derleme çıktıları
+.venv/
+build/
+__pycache__/
+*.pyc
+.claude/
+.codex/
+.agents/
+selftest_sonuc.txt
+
+# --- dist: sadece kurulum betiği repoya girer
+dist/*
+!dist/kurulum.iss
+
+# --- büyük veri (repo dışı; kaynak fotoğraflar/çizimler ve üretilen indeksler)
+cad_png/
+cad_dwg/
+photos/
+
+# --- index: yalnız insan-onaylı küçük dosyalar repoya girer
+index/*
+!index/excluded_trivial.json
+
+# --- data: yalnız etiketler ve donmuş ayrım repoya girer (asıl insan emeği)
+data/*
+!data/eval/
+data/eval/*
+!data/eval/labels_clean.json
+!data/eval/projection_split.json
+!data/bos_cad_dosyalari.txt

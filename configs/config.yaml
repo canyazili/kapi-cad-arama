@@ -1,0 +1,56 @@
+# Tüm scriptlerin ortak ayar dosyası.
+# Yollar proje köküne (bu dosyanın bir üst klasörüne) göredir.
+
+model:
+  hub_repo: facebookresearch/dinov2   # torch.hub deposu
+  name: dinov2_vitb14                 # embedding modeli (CLIP kullanma!)
+
+hed:
+  pretrained: lllyasviel/Annotators   # controlnet_aux HEDdetector ağırlıkları
+
+text_removal:
+  remove_text: true       # kapı-crop sonrası OCR ile metin silme adımı açık/kapalı
+  min_confidence: 0.5     # bu güven skorunun altındaki tespitler SİLİNMEZ (kapı detayını korur)
+  inpaint_radius: 3       # cv2.inpaint (TELEA) yarıçapı
+  mask_dilate: 7          # metin maskesini genişletme (px); harf kenarı kalıntısı kalmasın
+
+image_size: 518        # DINOv2 vitb14 için 14'ün katı olmalı
+top_k: 20              # arama sonucu sayısı
+
+# true ise index/excluded_trivial.json'daki parça profilleri (08_filter_trivial
+# onayı) hem aramadan hem yeni indeks kurulumlarından dışlanır (dosya silinmez).
+# 2026-07-04: isim kalıbı kuralı (5.281 dosya) örneklem onayından geçti, açıldı.
+exclude_trivial: true
+
+# Aktif indeks varyantı: "base" -> index/, diğerleri -> index/variants/<ad>/,
+# "fusion" -> aşağıdaki fusion bloğundaki varyantların ağırlıklı skor toplamı.
+# Varyantın hangi modelle kurulduğu meta.json'dan okunur; sorgu embedding'i
+# otomatik aynı modeli kullanır.
+# 2026-07-07: projeksiyon katmanı (07_train_projection, 5.176 insan-onaylı çiftle)
+# hiç görülmemiş test ailelerinde füzyonu ezdi: r@20 %49,7 vs %13,9, r@1 %19,8 vs %7,0
+# (04 ile bağımsız doğrulandı). Eski davranışa dönüş: active_index: fusion
+# 2026-07-08: projected_final = aynı tarifin TÜM 2.264 etiketli fotoyla eğitilmiş
+# üretim modeli (07 train --final --epochs 12). Ölçümü yok (ayrılmış veri kalmadı);
+# deney kıyasları donmuş ayrımlı "projected" varyantıyla yapılır.
+# 2026-07-13: İKİ OMURGALI ENSEMBLE üretimde — dinov3+dinov2 projeksiyonları
+# farklı hatalar yapıyor, yarı yarıya skor toplamı ikisini de eziyor
+# (donmuş test, dev modeller: düz r@20 %68,3 vs %63,1; gruplu kart @20 %77,5).
+# w=0.5 val taramasıyla seçildi. Tek omurgaya dönüş: active_index: projected_final
+active_index: fusion
+
+fusion:
+  variants: [projected_final, projected_final_dinov2]
+  weights: [0.5, 0.5]
+batch_size: 32         # embedding batch boyutu
+checkpoint_every: 20   # 03_build_index: kaç batch'te bir checkpoint yazılsın
+
+paths:
+  cad_png: cad_png                    # SADECE OKU
+  photos: photos                      # SADECE OKU
+  cad_clean: data/cad_clean
+  photos_lineart: data/photos_lineart
+  debug: data/debug
+  eval_labels: data/eval/labels.json  # bulunamazsa proje kökündeki labels.json denenir
+  eval_dir: data/eval                 # cache, missing.log, worst_cases.txt, results_*.json buraya
+  index_dir: index
+  errors_log: data/errors.log

@@ -1,0 +1,17 @@
+# DİKKAT: torch CUDA sürümü özel indeksten kurulur; düz "pip install" CPU
+# sürümüyle EZER (2026-07-07'de easyocr kurulumu bunu yaptı, eğitim CPU'ya düştü).
+# Doğrusu: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# Yeni paket kurduktan sonra kontrol: python -c "import torch; print(torch.cuda.is_available())"
+torch
+torchvision
+numpy
+Pillow
+opencv-python
+faiss-cpu
+controlnet-aux
+easyocr
+timm
+streamlit
+tqdm
+PyYAML
+pandas
