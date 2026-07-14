@@ -1,10 +1,10 @@
 # Kapı → CAD Arama
 
 Kapı **fotoğrafından**, 32.000+ AutoCAD çiziminin içinden en benzerini bulan görsel arama sistemi.
-Masaüstü uygulaması (Tkinter) + eğitim/değerlendirme scriptleri.
+Masaüstü uygulaması (Flet) + eğitim/değerlendirme scriptleri.
 
 **Güncel başarı** (445 hiç görülmemiş test fotoğrafı, gruplu kart görünümü):
-ilk kartta doğru tasarım **%42,7** · ilk 20 kartta **%77,5**.
+ilk kartta doğru tasarım **%47,0** · ilk 20 kartta **%77,8**.
 
 ## Nasıl çalışıyor?
 
@@ -33,7 +33,11 @@ fotoğraf ──► kapı-crop ──► OCR ile metin silme ──► HED linea
 
 ```
 search.py               arama çekirdeği (embedder'lar, füzyon, FAISS)
-kapi_arama_app.py       masaüstü uygulaması (+ --selftest modu)
+kapi_arama_flet.py      masaüstü uygulaması (Flet arayüz: Arama / Kapı Ekle / Son Eklenenler)
+kapi_arama_app.py       çekirdek kütüphane: group_results, selftest, cad_image_path,
+                        taşınabilir model önbellek kurulumu (flet buradan import eder)
+katalog.py              kataloğa kapı ekleme / silme (indeks + etiket + foto yönetimi)
+dwg2png.py              DWG/DXF → PNG (ODA File Converter + ezdxf/matplotlib)
 configs/config.yaml     tüm ayarlar (aktif indeks, füzyon ağırlıkları, yollar)
 scripts/
   01_clean_cad.py         CAD PNG temizliği
@@ -44,10 +48,9 @@ scripts/
   07_train_projection.py  projeksiyon eğitimi (--backbone dinov2|dinov3, --final,
                           --twin-mask-sim, --out-variant)
   10_assist_label.py      model destekli etiketleme sayfası (--top-k, --group)
-  experiments/            tek seferlik deney scriptleri (kıyas, ensemble taraması)
-app/main.py             eski Streamlit arayüzü
-dist/kurulum.iss        Inno Setup kurulum betiği (tek dosyalık dağıtım)
-KapiArama.spec          PyInstaller exe tarifi
+  experiments/            etiketleme (etiket_*), galeri (galeri_*), lineart yenileme,
+                          füzyon/gruplu-kart ölçüm araçları + eski kıyas scriptleri
+KapiArama_flet.spec     PyInstaller exe tarifi (Flet giriş; flet_desktop + ezdxf/matplotlib)
 ```
 
 **Repoda OLMAYAN** (boyut nedeniyle .gitignore'da): `cad_png/`, `cad_dwg/`, `photos/`
@@ -81,9 +84,15 @@ python -m venv .venv
 
 ## Dağıtım
 
-- **Taşınabilir ZIP:** `dist/paket` klasörü (exe + modeller + indeksler, internet gerektirmez)
-  arşivlenip dağıtılır. Paket güncelleme: yeni `index/variants/projected_final*` klasörlerini
-  ve `configs/config.yaml`'ı `dist/paket`'e kopyala; kod değiştiyse PyInstaller ile exe'yi
-  yeniden derle (`pyinstaller KapiArama.spec --clean`; önce `TCL_LIBRARY`/`TK_LIBRARY`
-  ortam değişkenlerini ayarla).
-- **Tek dosyalık kurulum:** `ISCC.exe dist/kurulum.iss` (Inno Setup 6).
+- **Taşınabilir klasör:** exe + `_internal` + `configs`/`data/cad_clean`/`index` + `modeller`
+  (indirilmiş omurga önbelleği) tek klasörde toplanır; internet/kurulum gerektirmez, hedef
+  PC'ye kopyalanıp `KapiArama.exe` çift tıklanır.
+- **Exe derleme:** `pyinstaller KapiArama_flet.spec --clean` (Flet giriş; flet_desktop +
+  ezdxf/matplotlib bundle'a girer, tkinter dışlanır — TCL/TK ortam değişkeni GEREKMEZ).
+  Derleme sonrası taze `index/variants/projected_final*` + `configs/config.yaml` +
+  `data/cad_clean`'i pakete kopyala. `modeller/` önbelleği build'den bağımsızdır, dokunma.
+- **Kendi kendini test:** `KapiArama.exe --selftest [foto]` (arayüz açmadan tam boru hattını
+  koşar, sonucu `selftest_sonuc.txt`'ye yazar).
+- **DWG desteği (opsiyonel):** ham `.dwg` çevirmek için hedef PC'de
+  [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter) (ücretsiz)
+  ya da paketin yanında `araclar/ODAFileConverter*/` gerekir. DXF ve PNG/JPG ODA'sız çalışır.

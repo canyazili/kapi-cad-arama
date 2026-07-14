@@ -164,6 +164,17 @@ def ink_ratio(lineart: Image.Image) -> float:
     return float((g < 128).mean())
 
 
+def enhance_contrast(img: Image.Image) -> Image.Image:
+    """CLAHE ile bölgesel kontrast açar (L kanalında). Koyu/soluk kapılarda
+    HED'in göremediği desen çizgilerini görünür kılmak için; sadece çizgi
+    oranı MIN_INK_RATIO altında kalan fotolarda devreye girer."""
+    lab = cv2.cvtColor(np.asarray(img.convert("RGB")), cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    lab = cv2.merge((clahe.apply(l), a, b))
+    return Image.fromarray(cv2.cvtColor(lab, cv2.COLOR_LAB2RGB))
+
+
 def process_photo(img_or_path, target_size: int = None, return_steps: bool = False):
     """Tek fotoğrafı arama pipeline'ına hazırlar: kapı-crop [+ metin silme] + HED lineart.
 
@@ -193,6 +204,15 @@ def process_photo(img_or_path, target_size: int = None, return_steps: bool = Fal
     cleaned = remove_text(cropped, cfg) if do_clean else None
     lineart = to_lineart(cleaned if cleaned is not None else cropped, target_size)
 
+    # Kurtarma 1: çizgi çok azsa (koyu/soluk kapı) kontrastı açıp yeniden dene
+    # (2026-07-14 denetimi: 39 fotoda desen çizgileri HED'de kayboluyordu)
+    if ink_ratio(lineart) < MIN_INK_RATIO:
+        src = cleaned if cleaned is not None else cropped
+        lineart_enh = to_lineart(enhance_contrast(src), target_size)
+        if ink_ratio(lineart_enh) > ink_ratio(lineart):
+            lineart = lineart_enh
+
+    # Kurtarma 2: hâlâ azsa kırpma kapıyı kaçırmış olabilir — tam kareyle dene
     if ink_ratio(lineart) < MIN_INK_RATIO and cropped.size != img.size:
         cleaned_full = remove_text(img, cfg) if do_clean else None
         lineart_full = to_lineart(cleaned_full if cleaned_full is not None else img,

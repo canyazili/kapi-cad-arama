@@ -20,11 +20,13 @@ photos/
 # --- index: yalnız insan-onaylı küçük dosyalar repoya girer
 index/*
 !index/excluded_trivial.json
+!index/eklenen_kapilar.json
 
 # --- data: yalnız etiketler ve donmuş ayrım repoya girer (asıl insan emeği)
 data/*
 !data/eval/
 data/eval/*
 !data/eval/labels_clean.json
+!data/eval/labels_ekli.json
 !data/eval/projection_split.json
 !data/bos_cad_dosyalari.txt
