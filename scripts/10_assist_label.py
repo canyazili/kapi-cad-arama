@@ -73,7 +73,7 @@ def cmd_generate(args):
         # varyant verilmez: config'deki aktif indeks (üretim modeli) kullanılır
         engine = get_engine()
         if args.group:
-            import kapi_arama_app as app_mod  # group_results (ikiz tekilleştirme)
+            import core as app_mod  # group_results (ikiz tekilleştirme)
         cache_dir = ROOT / "data" / "eval" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         errors, since = 0, 0

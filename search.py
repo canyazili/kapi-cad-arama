@@ -11,7 +11,6 @@ Akış: fotoğraf -> kapı-crop + HED lineart (02 scriptindeki process_photo)
 DINOv2 embedder'ı scripts/03_build_index.py de buradan import eder;
 indeksleme ve arama aynı modeli/aynı ön işlemeyi kullanır.
 """
-import importlib.util
 import json
 import os
 import sys
@@ -48,12 +47,11 @@ def load_config():
 
 
 def _load_photo_module():
-    """scripts/02_photo_to_lineart.py sayıyla başladığı için importlib ile yüklenir."""
-    path = ROOT / "scripts" / "02_photo_to_lineart.py"
-    spec = importlib.util.spec_from_file_location("photo_to_lineart", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    """Foto→lineart işleme modülü (crop + OCR + HED). Mantık artık kök modül
+    photo_lineart'ta; paketlenmiş exe scripts/ içermediği için buradan import edilir.
+    Tembel (gecikmeli) import: photo_lineart de search'ü import ettiğinden döngü olmasın."""
+    import photo_lineart
+    return photo_lineart
 
 
 class DinoEmbedder:

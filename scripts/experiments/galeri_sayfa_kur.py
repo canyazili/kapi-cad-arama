@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 from urllib.parse import quote
 
-ROOT = Path(r"c:/Users/canya/Desktop/kapı")
+ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "data" / "debug" / "galeri"
 
 FLAG_TR = {

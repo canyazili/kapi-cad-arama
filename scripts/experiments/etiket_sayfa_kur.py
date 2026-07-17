@@ -19,7 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(r"c:/Users/canya/Desktop/kapı")
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from label_tools import normalize_name  # noqa: E402
 

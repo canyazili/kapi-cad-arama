@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(r"c:/Users/canya/Desktop/kapı")
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 

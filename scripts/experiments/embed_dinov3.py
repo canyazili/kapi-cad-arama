@@ -13,7 +13,7 @@ from PIL import Image
 from tqdm import tqdm
 
 sys.stdout.reconfigure(encoding="utf-8")
-ROOT = Path(r"c:\Users\canya\Desktop\kapı")
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "train_cache" / "dinov3"
 MODEL_ID = "facebook/dinov3-vitb16-pretrain-lvd1689m"
 IMG_SIZE = 512          # patch16 katı; dinov2'deki 518'e en yakın adil çözünürlük

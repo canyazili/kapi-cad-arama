@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """kapi_arama_flet.py — Kapı → CAD Arama, Flet arayüzü (Tkinter'ın yerine).
 
-Üç sekme: Arama / Kapı Ekle / Son Eklenenler — işlevler kapi_arama_app.py
-(Tkinter) ile birebir; arama çekirdeği search.py, katalog işleri katalog.py.
+Üç sekme: Arama / Kapı Ekle / Son Eklenenler. Ortak yardımcılar core.py
+(ROOT, gruplama, selftest); arama çekirdeği search.py, katalog işleri katalog.py.
 
 Çalıştırma:  python kapi_arama_flet.py [--demo]
   --demo: açılışta örnek foto yükler ve gerçek aramayı kendiliğinden koşar.
@@ -20,7 +20,8 @@ from pathlib import Path
 
 import flet as ft
 
-import kapi_arama_app as core   # ROOT çözümü, group_results, portable cache kurulumu
+import core   # ROOT çözümü, group_results, portable cache kurulumu, selftest
+import marka_assets as ma       # FUAR AHŞAP logo varlıkları (base64 gömülü)
 import search
 
 ROOT = search.ROOT
@@ -28,26 +29,31 @@ DEMO = "--demo" in sys.argv
 PHOTO_EXTS = ["png", "jpg", "jpeg", "webp"]
 DRAWING_EXTS = ["dwg", "dxf"] + PHOTO_EXTS
 
-# ------------------------------------------------------------------ palet
-BG = "#F7F8FA"          # genel zemin
-CARD = "#FFFFFF"        # kart yüzeyi
-NAVY = "#1E3A5F"        # ana renk (üst bar, birincil buton, aktif sekme)
-AMBER = "#E8A33D"       # vurgu (yüksek skor rozeti, yıldız) — az kullan
-NAVY_SOFT = "#E9F0F7"   # hover / seçim zemini
-TEXT = "#1A1A1A"
-MUTED = "#6B7280"
-BORDER = "#E3E7EE"
-TAB_INACTIVE = "#A8C0DC"
+# ------------------------------------------------------- palet (FUAR AHŞAP)
+BG = "#F1F5F2"           # yumuşak yeşilimsi zemin
+CARD = "#FFFFFF"         # kart yüzeyi
+PRIMARY = "#48B06E"      # baskın parlak yeşil — birincil buton, aktif çizgi, vurgu
+PRIMARY_DARK = "#213B37" # koyu yeşil — üst bar, başlık, derinlik
+PRIMARY_SOFT = "#E6F4EC" # açık yeşil — hover / seçim / soft rozet
+PRIMARY_HOVER = "#3F9E62"# birincil buton hover
+TEXT = "#1A211E"
+MUTED = "#6E7B75"
+BORDER = "#E1E8E4"
+TAB_INACTIVE = "#9DBEA9" # koyu yeşil bar üstünde açık yeşilimsi sekme yazısı
+STAR = "#213B37"         # ilk-3 yıldızı (koyu yeşil, rozetlerden ayrışsın)
 DANGER = "#C0392B"
-OK_GREEN = "#1E7E34"
+OK_GREEN = "#2E9E5B"
+DISABLED_BG = "#C4D5CB"
+DISABLED_FG = "#EEF5F0"
 
-SHADOW = ft.BoxShadow(blur_radius=6, spread_radius=0,
-                      color=ft.Colors.with_opacity(0.07, "black"),
-                      offset=ft.Offset(0, 2))
-SHADOW_HOVER = ft.BoxShadow(blur_radius=14, spread_radius=1,
-                            color=ft.Colors.with_opacity(0.14, "black"),
-                            offset=ft.Offset(0, 4))
+SHADOW = ft.BoxShadow(blur_radius=10, spread_radius=0,
+                      color=ft.Colors.with_opacity(0.06, PRIMARY_DARK),
+                      offset=ft.Offset(0, 3))
+SHADOW_HOVER = ft.BoxShadow(blur_radius=22, spread_radius=1,
+                            color=ft.Colors.with_opacity(0.17, PRIMARY_DARK),
+                            offset=ft.Offset(0, 7))
 W600 = ft.FontWeight.W_600
+W700 = ft.FontWeight.W_700
 
 
 # ------------------------------------------------------- görsel yardımcıları
@@ -76,14 +82,13 @@ def b64_image(path: Path, max_side=560) -> str | None:
         return None
 
 
-def dashed_zone_b64(w=268, h=190, r=14) -> str:
-    """Kesikli lacivert çerçeveli boş alan görseli (PIL ile, 2x keskinlik)."""
+def dashed_zone_b64(w=268, h=190, r=14, col=(72, 176, 110, 255)) -> str:
+    """Kesikli yeşil çerçeveli boş alan görseli (PIL ile, 2x keskinlik)."""
     from PIL import Image, ImageDraw
     s = 2
     W, H, R = w * s, h * s, r * s
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    col = (30, 58, 95, 255)
     lw, dash, gap = 2 * s, 10 * s, 7 * s
     for box, a0, a1 in (((0, 0, 2 * R, 2 * R), 180, 270),
                         ((W - 2 * R - lw, 0, W - lw, 2 * R), 270, 360),
@@ -112,12 +117,19 @@ def dashed_zone_b64(w=268, h=190, r=14) -> str:
 class FletApp:
     def __init__(self, page: ft.Page):
         self.page = page
-        page.title = "Kapı → CAD Arama"
+        page.title = "FUAR AHŞAP — Kapı Arama"
         page.padding = 0
         page.bgcolor = BG
         page.window.min_width = 1280
         page.window.min_height = 800
         page.window.maximized = True
+        _icon = ROOT / "marka" / "app_icon.ico"
+        if _icon.exists():
+            try:
+                page.window.icon = str(_icon)
+            except Exception:
+                pass
+        self.current_tab = 0
 
         self.engine = None
         self.engine_lock = threading.Lock()
@@ -139,7 +151,8 @@ class FletApp:
         self.tab_defs = ["Arama", "Kapı Ekle", "Son Eklenenler"]
         self.tab_bars = []
         self.content = ft.Container(expand=True)
-        page.add(ft.Column([self._topbar(), self.content], spacing=0, expand=True))
+        page.add(ft.Column([self._topbar(), self.content, self._footer()],
+                           spacing=0, expand=True))
 
         self.search_view = self._build_search_view()
         self.add_view = self._build_add_view()
@@ -163,28 +176,62 @@ class FletApp:
         for i, name in enumerate(self.tab_defs):
             t = ft.Container(
                 height=56, alignment=ft.alignment.center,
-                padding=ft.padding.only(16, 0, 16, 0),
+                padding=ft.padding.symmetric(0, 18),
                 border=ft.border.only(bottom=ft.BorderSide(3, "transparent")),
                 content=ft.Text(name, color=TAB_INACTIVE, size=14, weight=W600),
                 on_click=lambda e, ix=i: self._show_tab(ix),
+                on_hover=lambda e, ix=i: self._tab_hover(e, ix),
             )
             self.tab_bars.append(t)
             tabs.append(t)
+
+        # marka bloğu: beyaz yuvarlak karo içinde yeşil işaret + beyaz wordmark
+        mark_tile = ft.Container(
+            content=ft.Image(src_base64=ma.MARK_B64, height=28,
+                             fit=ft.ImageFit.CONTAIN),
+            bgcolor="white", border_radius=9,
+            padding=ft.padding.symmetric(6, 10))
+        brand = ft.Row([
+            mark_tile,
+            ft.Container(width=12),
+            ft.Image(src_base64=ma.WORD_B64, height=17, fit=ft.ImageFit.CONTAIN),
+            ft.Container(width=14),
+            ft.Container(width=1, height=22,
+                         bgcolor=ft.Colors.with_opacity(0.22, "white")),
+            ft.Container(width=14),
+            ft.Text("Kapı Arama", color=TAB_INACTIVE, size=13, weight=W600),
+        ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
         return ft.Container(
-            height=56, bgcolor=NAVY,
-            padding=ft.padding.only(left=20, right=12),
+            height=56, bgcolor=PRIMARY_DARK,
+            padding=ft.padding.only(left=18, right=8),
             content=ft.Row([
-                ft.Text("Kapı → CAD Arama", color="white", size=17, weight=W600),
-                ft.Text("fotoğraftan en benzer çizimi bulur",
-                        color=TAB_INACTIVE, size=12.5),
+                brand,
                 ft.Container(expand=True),
-                ft.Row(tabs, spacing=2),
-            ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=14))
+                ft.Row(tabs, spacing=4),
+            ], vertical_alignment=ft.CrossAxisAlignment.CENTER))
+
+    def _tab_hover(self, e, ix):
+        if ix == self.current_tab:
+            return
+        e.control.content.color = "white" if e.data == "true" else TAB_INACTIVE
+        e.control.update()
+
+    # ------------------------------------------------------------ alt künye
+    def _footer(self):
+        """İnce, sönük telif satırı (sağ altta)."""
+        return ft.Container(
+            height=24, bgcolor=BG,
+            border=ft.border.only(top=ft.BorderSide(1, BORDER)),
+            padding=ft.padding.only(right=14),
+            alignment=ft.alignment.center_right,
+            content=ft.Text("© 2026 Muratcan Yazılı", size=10, color=MUTED))
 
     def _show_tab(self, ix):
+        self.current_tab = ix
         for i, t in enumerate(self.tab_bars):
             t.border = ft.border.only(
-                bottom=ft.BorderSide(3, AMBER if i == ix else "transparent"))
+                bottom=ft.BorderSide(3, PRIMARY if i == ix else "transparent"))
             t.content.color = "white" if i == ix else TAB_INACTIVE
         self.content.content = (self.search_view, self.add_view,
                                 self.recent_view)[ix]
@@ -202,7 +249,7 @@ class FletApp:
                     width=268, height=190, alignment=ft.alignment.center,
                     content=ft.Column([
                         ft.Icon(ft.Icons.ADD_PHOTO_ALTERNATE_OUTLINED,
-                                size=44, color=NAVY),
+                                size=44, color=PRIMARY),
                         ft.Text("Kapı fotoğrafı seçmek için tıkla",
                                 size=12.5, color=MUTED,
                                 text_align=ft.TextAlign.CENTER),
@@ -217,56 +264,37 @@ class FletApp:
         self.photo_name = ft.Text("", size=11.5, color=MUTED, max_lines=1,
                                   overflow=ft.TextOverflow.ELLIPSIS)
 
-        # açılır-kapanır "İşlenmiş hali"
-        self.lineart_open = False
-        self.lineart_chev = ft.Icon(ft.Icons.EXPAND_MORE, size=18, color=MUTED)
-        self.lineart_img = ft.Container(
-            width=268, height=170, bgcolor=BG, border_radius=10,
-            alignment=ft.alignment.center,
-            content=ft.Text("aramadan sonra burada\nçizgi hali görünür",
-                            size=11.5, color=MUTED,
-                            text_align=ft.TextAlign.CENTER))
-        self.lineart_body = ft.Container(
-            visible=False, alignment=ft.alignment.center,
-            padding=ft.padding.only(top=6), content=self.lineart_img)
-        lineart_header = ft.Container(
-            content=ft.Row([ft.Text("İşlenmiş hali", size=13, weight=W600,
-                                    color=TEXT),
-                            ft.Container(expand=True), self.lineart_chev]),
-            padding=ft.padding.symmetric(8, 10), border_radius=8,
-            bgcolor=BG, on_click=self._toggle_lineart, ink=True)
-
         self.k_dd = ft.Dropdown(
             label="Sonuç sayısı", value="20", dense=True,
             options=[ft.dropdown.Option(v) for v in ("20", "30", "50")],
-            border_color=BORDER, focused_border_color=NAVY, width=268,
+            border_color=BORDER, focused_border_color=PRIMARY, width=268,
             text_size=13, content_padding=ft.padding.symmetric(6, 12),
             on_change=lambda e: setattr(self, "k", int(e.control.value)))
         self.group_cb = ft.Checkbox(
             label="Benzer çizimleri grupla", value=True,
-            active_color=NAVY, label_style=ft.TextStyle(size=13, color=TEXT),
+            active_color=PRIMARY, label_style=ft.TextStyle(size=13, color=TEXT),
             on_change=lambda e: setattr(self, "group", e.control.value))
 
         self.search_btn = ft.FilledButton(
-            "Ara", icon=ft.Icons.SEARCH, disabled=True, height=44, expand=True,
+            "Ara", icon=ft.Icons.SEARCH, disabled=True, height=46, expand=True,
             style=ft.ButtonStyle(
-                bgcolor={"": NAVY, "disabled": "#B9C4D2"},
-                color={"": "white", "disabled": "#F0F0F0"},
-                shape=ft.RoundedRectangleBorder(radius=8),
-                text_style=ft.TextStyle(size=14, weight=W600)),
+                bgcolor={"": PRIMARY, "disabled": DISABLED_BG},
+                color={"": "white", "disabled": DISABLED_FG},
+                overlay_color=ft.Colors.with_opacity(0.12, "white"),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                elevation={"": 0, "hovered": 1},
+                text_style=ft.TextStyle(size=14.5, weight=W700)),
             on_click=self._start_search)
 
         left = ft.Container(
-            width=300, bgcolor=CARD, padding=16,
+            width=300, bgcolor=CARD, padding=18,
             border=ft.border.only(right=ft.BorderSide(1, BORDER)),
             content=ft.Column([
-                ft.Text("Fotoğraf", size=13, weight=W600, color=TEXT),
+                ft.Text("KAPI FOTOĞRAFI", size=11, weight=W700, color=PRIMARY_DARK),
+                ft.Container(height=2),
                 self.drop_inner,
                 self.photo_name,
-                ft.Container(height=6),
-                lineart_header,
-                self.lineart_body,
-                ft.Container(height=10),
+                ft.Container(height=12),
                 self.k_dd,
                 self.group_cb,
                 ft.Container(expand=True),
@@ -277,13 +305,6 @@ class FletApp:
                                          padding=ft.padding.all(16))
         self._show_empty_state()
         return ft.Row([left, self.results_host], spacing=0, expand=True)
-
-    def _toggle_lineart(self, e):
-        self.lineart_open = not self.lineart_open
-        self.lineart_body.visible = self.lineart_open
-        self.lineart_chev.name = (ft.Icons.EXPAND_LESS if self.lineart_open
-                                  else ft.Icons.EXPAND_MORE)
-        self.page.update()
 
     # ------------------------------------------------------------ foto seçimi
     def _photo_picked(self, e: ft.FilePickerResultEvent):
@@ -296,14 +317,11 @@ class FletApp:
         b64 = b64_image(p, 540)
         self.drop_inner.content = ft.Container(
             width=268, height=190, border_radius=12, bgcolor=BG,
-            border=ft.border.all(1.5, NAVY), alignment=ft.alignment.center,
+            border=ft.border.all(1.5, PRIMARY), alignment=ft.alignment.center,
             content=ft.Image(src_base64=b64, fit=ft.ImageFit.CONTAIN,
                              border_radius=10) if b64 else
             ft.Text("(görsel açılamadı)", color=MUTED, size=12))
         self.photo_name.value = f"{p.name}   (değiştirmek için tıkla)"
-        self.lineart_img.content = ft.Text(
-            "aramadan sonra burada\nçizgi hali görünür", size=11.5,
-            color=MUTED, text_align=ft.TextAlign.CENTER)
         self.search_btn.disabled = False
         self.page.update()
 
@@ -323,8 +341,6 @@ class FletApp:
             engine = self._get_engine()
             self._set_loading_text("Fotoğraf işleniyor… (kırpma + yazı silme + çizgi)")
             lineart, _, _ = engine.prepare_query(photo)
-            self.lineart_img.content = ft.Image(
-                src_base64=pil_to_b64(lineart), fit=ft.ImageFit.CONTAIN)
             self._set_loading_text("Katalog taranıyor…")
             if group:
                 raw = engine.search_prepared(
@@ -348,11 +364,11 @@ class FletApp:
             alignment=ft.alignment.center,
             content=ft.Column([
                 ft.Icon(ft.Icons.IMAGE_SEARCH, size=88,
-                        color=ft.Colors.with_opacity(0.18, NAVY)),
+                        color=ft.Colors.with_opacity(0.22, PRIMARY)),
                 ft.Text("Soldan bir kapı fotoğrafı seç, 'Ara' ile kataloğu tara",
                         size=14.5, color=MUTED),
                 ft.Text("Sonuçlar burada kart kart listelenir; karta tıklayınca "
-                        "adını kopyalayabilirsin", size=12, color="#9AA3AF"),
+                        "adını kopyalayabilirsin", size=12, color="#9AA79F"),
             ], spacing=10, alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER))
 
@@ -368,15 +384,15 @@ class FletApp:
             skels.controls.append(ft.Container(
                 bgcolor=CARD, border_radius=12, shadow=SHADOW,
                 content=ft.Column([
-                    ft.Container(expand=True, bgcolor="#EDF0F4",
+                    ft.Container(expand=True, bgcolor="#E7EEEA",
                                  border_radius=ft.border_radius.only(12, 12, 0, 0)),
-                    ft.Container(height=12, width=120, bgcolor="#EDF0F4",
+                    ft.Container(height=12, width=120, bgcolor="#E7EEEA",
                                  border_radius=6,
                                  margin=ft.margin.symmetric(10, 12)),
                 ], spacing=0)))
         self.results_host.content = ft.Column([
             ft.Row([self.loading_text, ft.Container(width=10),
-                    ft.Container(ft.ProgressBar(color=NAVY, bgcolor=NAVY_SOFT,
+                    ft.Container(ft.ProgressBar(color=PRIMARY, bgcolor=PRIMARY_SOFT,
                                                 height=4, border_radius=4),
                                  expand=True)]),
             ft.Container(height=10),
@@ -402,13 +418,13 @@ class FletApp:
     # -------------------------------------------------------------- sonuç kartı
     def _score_badge(self, score):
         if score >= 0.75:
-            bg, fg = AMBER, "#1A1A1A"
+            bg, fg = PRIMARY, "white"
         elif score >= 0.55:
-            bg, fg = NAVY_SOFT, NAVY
+            bg, fg = PRIMARY_SOFT, PRIMARY_DARK
         else:
-            bg, fg = "#E5E7EB", MUTED
+            bg, fg = "#EBEFEC", MUTED
         return ft.Container(
-            content=ft.Text(f"{score:.3f}", size=11.5, weight=W600, color=fg),
+            content=ft.Text(f"{score:.3f}", size=11.5, weight=W700, color=fg),
             bgcolor=bg, border_radius=20,
             padding=ft.padding.symmetric(3, 9))
 
@@ -421,14 +437,16 @@ class FletApp:
                                  padding=10, left=0, right=0, top=0, bottom=0)]
         if rank < 3:
             overlays.append(ft.Container(
-                ft.Icon(ft.Icons.STAR_ROUNDED, size=18, color=AMBER),
-                left=8, top=6))
+                ft.Icon(ft.Icons.STAR_ROUNDED, size=15, color=STAR),
+                left=8, top=8, padding=4,
+                bgcolor=ft.Colors.with_opacity(0.92, "white"),
+                border_radius=20))
         overlays.append(ft.Container(self._score_badge(score), right=8, top=8))
         if variants:
             overlays.append(ft.Container(
                 content=ft.Text(f"+{len(variants)} varyant", size=10.5,
-                                weight=W600, color=NAVY),
-                bgcolor=NAVY_SOFT, border_radius=20,
+                                weight=W700, color=PRIMARY_DARK),
+                bgcolor=PRIMARY_SOFT, border_radius=20,
                 padding=ft.padding.symmetric(2, 8),
                 right=8, bottom=8,
                 on_click=lambda e, n=name, v=variants: self._open_variants(n, v)))
@@ -440,11 +458,11 @@ class FletApp:
             padding=ft.padding.symmetric(2, 4),
             content=ft.Row([
                 ft.TextButton("Adı kopyala", icon=ft.Icons.CONTENT_COPY,
-                              style=ft.ButtonStyle(color=NAVY,
+                              style=ft.ButtonStyle(color=PRIMARY_DARK,
                                                    text_style=ft.TextStyle(size=11.5)),
                               on_click=lambda e, n=name: self._copy_name(n)),
                 ft.TextButton("Klasörde göster", icon=ft.Icons.FOLDER_OPEN,
-                              style=ft.ButtonStyle(color=NAVY,
+                              style=ft.ButtonStyle(color=PRIMARY_DARK,
                                                    text_style=ft.TextStyle(size=11.5)),
                               on_click=lambda e, n=name: self._show_in_folder(n)),
             ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, spacing=0))
@@ -457,12 +475,12 @@ class FletApp:
             padding=ft.padding.only(10, 8, 10, 10))
 
         card = ft.Container(
-            bgcolor=CARD, border_radius=12, shadow=SHADOW,
+            bgcolor=CARD, border_radius=14, shadow=SHADOW,
             border=ft.border.all(1.5, "transparent"),
             animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
             content=ft.Column([
                 ft.Container(ft.Stack(overlays), expand=True, bgcolor=CARD,
-                             border_radius=ft.border_radius.only(12, 12, 0, 0)),
+                             border_radius=ft.border_radius.only(14, 14, 0, 0)),
                 title,
             ], spacing=0))
         card._strip = strip
@@ -486,7 +504,7 @@ class FletApp:
                 self.selected_card.border = ft.border.all(1.5, "transparent")
                 self.selected_card._strip.visible = False
                 self.selected_card.update()
-            card.border = ft.border.all(1.5, NAVY)
+            card.border = ft.border.all(2, PRIMARY)
             card._strip.visible = True
             card.scale = 1.0
             self.selected_card = card
@@ -510,7 +528,7 @@ class FletApp:
                             overflow=ft.TextOverflow.ELLIPSIS, tooltip=name),
                     ft.TextButton("Adı kopyala", icon=ft.Icons.CONTENT_COPY,
                                   style=ft.ButtonStyle(
-                                      color=NAVY,
+                                      color=PRIMARY_DARK,
                                       text_style=ft.TextStyle(size=11)),
                                   on_click=lambda e, n=name: self._copy_name(n)),
                 ], spacing=6,
@@ -553,7 +571,7 @@ class FletApp:
                     ft.Container(
                         width=430, height=110, alignment=ft.alignment.center,
                         content=ft.Column([
-                            ft.Icon(icon, size=28, color=NAVY),
+                            ft.Icon(icon, size=28, color=PRIMARY),
                             ft.Text("Dosya seçmek için tıkla"
                                     + ("  (DWG/DXF/PNG/JPG)" if key == "cizim"
                                        else "  (PNG/JPG)"),
@@ -575,7 +593,7 @@ class FletApp:
                 expand=True, bgcolor=CARD, border_radius=12, shadow=SHADOW,
                 padding=16,
                 content=ft.Column([
-                    ft.Text(title, size=14, weight=W600, color=NAVY),
+                    ft.Text(title, size=14, weight=W700, color=PRIMARY_DARK),
                     ft.Row([zone], alignment=ft.MainAxisAlignment.CENTER),
                     ft.Container(ft.Column([files_row],
                                            scroll=ft.ScrollMode.AUTO),
@@ -583,16 +601,18 @@ class FletApp:
                 ], spacing=10)))
 
         self.add_status = ft.Text("Hazır.", size=12.5, color=MUTED)
-        self.add_progress = ft.ProgressBar(color=NAVY, bgcolor=NAVY_SOFT,
+        self.add_progress = ft.ProgressBar(color=PRIMARY, bgcolor=PRIMARY_SOFT,
                                            height=4, border_radius=4,
                                            visible=False)
         self.add_btn = ft.FilledButton(
-            "Kataloğa Ekle", icon=ft.Icons.CHECK, height=44, expand=True,
+            "Kataloğa Ekle", icon=ft.Icons.CHECK, height=46, expand=True,
             style=ft.ButtonStyle(
-                bgcolor={"": NAVY, "disabled": "#B9C4D2"},
-                color={"": "white", "disabled": "#F0F0F0"},
-                shape=ft.RoundedRectangleBorder(radius=8),
-                text_style=ft.TextStyle(size=14, weight=W600)),
+                bgcolor={"": PRIMARY, "disabled": DISABLED_BG},
+                color={"": "white", "disabled": DISABLED_FG},
+                overlay_color=ft.Colors.with_opacity(0.12, "white"),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                elevation={"": 0, "hovered": 1},
+                text_style=ft.TextStyle(size=14.5, weight=W700)),
             on_click=self._start_add)
 
         return ft.Container(
@@ -628,10 +648,10 @@ class FletApp:
             pp = Path(p)
             if pp.suffix.lower() in (".dwg", ".dxf"):
                 gorsel = ft.Container(
-                    width=120, height=110, bgcolor=NAVY_SOFT, border_radius=8,
+                    width=120, height=110, bgcolor=PRIMARY_SOFT, border_radius=8,
                     alignment=ft.alignment.center,
                     content=ft.Column([
-                        ft.Icon(ft.Icons.ARCHITECTURE, size=30, color=NAVY),
+                        ft.Icon(ft.Icons.ARCHITECTURE, size=30, color=PRIMARY_DARK),
                         ft.Text("AutoCAD çizimi\n(PNG'ye çevrilir)", size=10,
                                 color=MUTED, text_align=ft.TextAlign.CENTER),
                     ], spacing=4, alignment=ft.MainAxisAlignment.CENTER,
@@ -723,7 +743,7 @@ class FletApp:
 
     # ================================================== SON EKLENENLER EKRANI
     def _build_recent_view(self):
-        self.recent_status = ft.Text("", size=12.5, color=NAVY)
+        self.recent_status = ft.Text("", size=12.5, color=PRIMARY_DARK)
         self.recent_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True,
                                      spacing=10)
         return ft.Container(
@@ -756,7 +776,7 @@ class FletApp:
                 alignment=ft.alignment.center, padding=40,
                 content=ft.Column([
                     ft.Icon(ft.Icons.INBOX_OUTLINED, size=64,
-                            color=ft.Colors.with_opacity(0.2, NAVY)),
+                            color=ft.Colors.with_opacity(0.25, PRIMARY)),
                     ft.Text("Henüz uygulamadan kapı eklenmedi.",
                             size=13.5, color=MUTED),
                 ], spacing=8,
@@ -876,7 +896,7 @@ class FletApp:
         self.page.update()
 
     # --------------------------------------------------------------- eylemler
-    def _snack(self, msg, color=NAVY):
+    def _snack(self, msg, color=PRIMARY_DARK):
         self.page.open(ft.SnackBar(ft.Text(msg, color="white"),
                                    bgcolor=color, duration=2500))
 

@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 
 sys.stdout.reconfigure(encoding="utf-8")
-ROOT = Path(r"c:\Users\canya\Desktop\kapı")
+ROOT = Path(__file__).resolve().parents[2]
 HERE = ROOT / "data" / "train_cache" / "dinov3"
 sys.path.insert(0, str(ROOT))
 from search import DinoEmbedder, load_config, load_excluded_trivial  # noqa: E402

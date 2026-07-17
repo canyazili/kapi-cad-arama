@@ -11,7 +11,11 @@ faiss-cpu
 controlnet-aux
 easyocr
 timm
-streamlit
 tqdm
 PyYAML
 pandas
+transformers
+flet
+ezdxf
+matplotlib
+pyinstaller

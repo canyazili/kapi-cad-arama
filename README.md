@@ -34,14 +34,18 @@ fotoğraf ──► kapı-crop ──► OCR ile metin silme ──► HED linea
 ```
 search.py               arama çekirdeği (embedder'lar, füzyon, FAISS)
 kapi_arama_flet.py      masaüstü uygulaması (Flet arayüz: Arama / Kapı Ekle / Son Eklenenler)
-kapi_arama_app.py       çekirdek kütüphane: group_results, selftest, cad_image_path,
+core.py                 ortak yardımcılar: group_results, selftest, cad_image_path,
                         taşınabilir model önbellek kurulumu (flet buradan import eder)
+photo_lineart.py        foto → kapı-crop + metin silme + HED lineart (search.py import eder)
+cad_normalize.py        CAD PNG normalizasyonu (katalog.py + scripts/01 import eder)
 katalog.py              kataloğa kapı ekleme / silme (indeks + etiket + foto yönetimi)
 dwg2png.py              DWG/DXF → PNG (ODA File Converter + ezdxf/matplotlib)
+marka_assets.py         FUAR AHŞAP logoları (base64 gömülü — çalışma anında dosya gerekmez)
+marka/                  logo kaynakları + app_icon.ico (exe / kurulum ikonu)
 configs/config.yaml     tüm ayarlar (aktif indeks, füzyon ağırlıkları, yollar)
 scripts/
-  01_clean_cad.py         CAD PNG temizliği
-  02_photo_to_lineart.py  foto → lineart boru hattı (crop + OCR + HED)
+  01_clean_cad.py         CAD PNG temizliği CLI (mantık kök modülde: cad_normalize.py)
+  02_photo_to_lineart.py  foto → lineart toplu CLI (mantık kök modülde: photo_lineart.py)
   03_build_index.py       embedding + FAISS indeks kurulumu
   04_evaluate.py          recall@k değerlendirmesi (labels_clean ile)
   05..09_*                teşhis / etiket onay araçları
@@ -51,10 +55,18 @@ scripts/
   experiments/            etiketleme (etiket_*), galeri (galeri_*), lineart yenileme,
                           füzyon/gruplu-kart ölçüm araçları + eski kıyas scriptleri
 KapiArama_flet.spec     PyInstaller exe tarifi (Flet giriş; flet_desktop + ezdxf/matplotlib)
+kurulum.iss             Inno Setup tarifi → FUARAHSAP_Kurulum.exe (kişiye özel kurulum,
+                        masaüstü/Başlat kısayolu; data+index güncellemede korunur)
 ```
 
+Not: `photo_lineart.py` / `cad_normalize.py` kök modüldür — paketlenmiş exe `scripts/`
+klasörünü İÇERMEZ (hem okunabilir kaynak sızmasın hem de çalışma anında diskten script
+yüklenmesin diye).
+
 **Repoda OLMAYAN** (boyut nedeniyle .gitignore'da): `cad_png/`, `cad_dwg/`, `photos/`
-(kaynak veriler), `index/` ve `data/` altındaki üretilmiş embedding/indeksler, `.venv`, `dist/paket`.
+(kaynak veriler), `index/` ve `data/` altındaki üretilmiş embedding/indeksler, `.venv`,
+`dist/`, `build/`, `modeller/` (çevrimdışı model önbelleği), `araclar/` (gömülü ODA),
+`FUARAHSAP_Kurulum.exe`.
 Repoya giren değerli küçük dosyalar: `data/eval/labels_clean.json` (insan-onaylı etiketler),
 `data/eval/projection_split.json` (donmuş eğitim/val/test ayrımı — kıyaslanabilirlik için kritik),
 `index/excluded_trivial.json` (parça-profil dışlama onayları), `labels.json` (ilk etiketler).
@@ -81,6 +93,17 @@ python -m venv .venv
   `projected_final*` (tüm veriyle eğitilen üretim modelleri) dürüstçe ölçülemez.
 - `faiss.write_index/read_index` Windows'ta Türkçe karakterli yollarda çalışmaz;
   serialize/deserialize + Python G/Ç kullanılır (kod zaten böyle).
+
+## Doğrulama
+
+```powershell
+.venv\Scripts\python -m unittest discover -s tests -v
+.venv\Scripts\python scripts\experiments\gruplu_kart_olc.py
+```
+
+İkinci komut donmuş test kümesindeki gruplu kart metriğini ölçer ve model,
+eşik, Recall@K ile fotoğraf sıralarını `data/eval/grouped_card_results.json`
+dosyasına kaydeder.
 
 ## Dağıtım
 

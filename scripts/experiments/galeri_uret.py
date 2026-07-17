@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-ROOT = Path(r"c:/Users/canya/Desktop/kapı")
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 m = importlib.import_module("02_photo_to_lineart")
 

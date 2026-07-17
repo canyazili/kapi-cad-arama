@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT = Path(r"c:/Users/canya/Desktop/kapı")
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 Image.MAX_IMAGE_PIXELS = None

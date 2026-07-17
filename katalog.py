@@ -2,7 +2,7 @@
 """katalog.py — Kataloğa çalışma anında yeni kapı (CAD çizimi) ekleme.
 
 Uygulamadaki "Yeni Kapı Ekle" özelliğinin çekirdeği. Yeni çizim:
-  1) 01_clean_cad.normalize_cad ile standart forma getirilir, data/cad_clean'e yazılır
+  1) cad_normalize.normalize_cad ile standart forma getirilir, data/cad_clean'e yazılır
      (cad_png/ salt-okunur kuralına dokunulmaz; küçük resimler cad_clean'den okunur),
   2) ham DINOv2 embedding'i base indekse (index/) eklenir — ikiz gruplama bunu kullanır,
   3) config'teki füzyon varyantlarının her birine kendi omurgası + projection.npz'siyle
@@ -16,7 +16,6 @@ Uygulamadaki "Yeni Kapı Ekle" özelliğinin çekirdeği. Yeni çizim:
 Tüm npy/json/faiss yazımları önce geçici dosyaya yapılır, sonra yer değiştirilir
 (yarıda kesilirse indeks bozulmasın).
 """
-import importlib.util
 import json
 import shutil
 from datetime import date
@@ -24,26 +23,13 @@ from pathlib import Path
 
 import numpy as np
 
+import cad_normalize
 import search
 
 ROOT = search.ROOT
 ADDED_PHOTOS_DIR = ROOT / "data" / "eklenen_fotolar"
 ADDED_LABELS = ROOT / "data" / "eval" / "labels_ekli.json"
 ADDED_LOG = ROOT / "index" / "eklenen_kapilar.json"
-
-_clean_mod = None
-
-
-def _load_clean_module():
-    """scripts/01_clean_cad.py sayıyla başladığı için importlib ile yüklenir."""
-    global _clean_mod
-    if _clean_mod is None:
-        path = ROOT / "scripts" / "01_clean_cad.py"
-        spec = importlib.util.spec_from_file_location("clean_cad", path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        _clean_mod = mod
-    return _clean_mod
 
 
 def _replace_write(path: Path, write_fn):
@@ -312,7 +298,7 @@ def add_entry(drawing_paths, photo_paths, engine=None, log=print):
         log(f"Çizim normalize ediliyor: {dp.name} -> {nm}")
         with Image.open(dp) as im:
             im.load()
-            cleans.append(_load_clean_module().normalize_cad(im, cfg["image_size"]))
+            cleans.append(cad_normalize.normalize_cad(im, cfg["image_size"]))
     clean_dir = ROOT / "data" / "cad_clean"
     clean_dir.mkdir(parents=True, exist_ok=True)
     for nm, cl in zip(names, cleans):
@@ -362,6 +348,7 @@ def add_entry(drawing_paths, photo_paths, engine=None, log=print):
     if ADDED_LABELS.exists():
         with open(ADDED_LABELS, "r", encoding="utf-8") as f:
             labels = json.load(f)
+    ADDED_LABELS.parent.mkdir(parents=True, exist_ok=True)  # temiz kurulumda data/eval yok
     ADDED_PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
     photo_names = []
     for pp in photos:

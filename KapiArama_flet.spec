@@ -9,7 +9,8 @@ from PyInstaller.utils.hooks import collect_all
 datas = []
 binaries = []
 hiddenimports = ['cv2', 'tqdm', 'yaml',
-                 'kapi_arama_app', 'search', 'katalog', 'dwg2png']
+                 'core', 'search', 'katalog', 'dwg2png', 'cad_normalize',
+                 'photo_lineart']
 for pkg in ('torch', 'torchvision', 'controlnet_aux', 'easyocr', 'timm', 'faiss',
             'transformers', 'tokenizers', 'safetensors', 'huggingface_hub',
             'regex', 'flet', 'flet_desktop', 'ezdxf', 'matplotlib'):
@@ -48,6 +49,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='marka/app_icon.ico',
 )
 coll = COLLECT(
     exe,
